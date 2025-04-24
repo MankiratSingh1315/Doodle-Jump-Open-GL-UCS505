@@ -6,13 +6,16 @@
 #include <iostream>
 #include <algorithm>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "include/stb_image.h"
+
 int windowWidth = 400;
 int windowHeight = 600;
 
 float playerX = windowWidth / 2.0f;
 float playerY = windowHeight / 5.0f;
-float playerWidth = 20.0f;
-float playerHeight = 30.0f;
+float playerWidth = 50.0f;
+float playerHeight = 60.0f;
 float playerVelX = 0.0f;
 float playerVelY = 0.0f;
 float moveSpeed = 4.0f;
@@ -32,6 +35,42 @@ float cameraY = 0.0f;
 int score = 0;
 bool gameOver = false;
 
+// Texture variables
+GLuint playerTexture;
+int playerTexWidth, playerTexHeight;
+
+// Function to load a texture
+bool loadTexture(const char* filename, GLuint& textureID, int& width, int& height) {
+    stbi_set_flip_vertically_on_load(true); // Add this line
+    int channels;
+    unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+    if (!data) {
+        std::cerr << "Error loading texture: " << filename << std::endl;
+        return false;
+    }
+
+    GLenum format = GL_RGB;
+    if (channels == 4) {
+        format = GL_RGBA;
+    }
+
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    // glGenerateMipmap(GL_TEXTURE_2D); // Optional: for better quality at smaller sizes
+
+    stbi_image_free(data);
+    glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
+
+    return true;
+}
+
 void drawRect(float x, float y, float width, float height) {
     glBegin(GL_QUADS);
     glVertex2f(x - width / 2, y - height / 2);
@@ -42,8 +81,25 @@ void drawRect(float x, float y, float width, float height) {
 }
 
 void drawPlayer() {
-    glColor3f(0.0f, 1.0f, 0.0f);
-    drawRect(playerX, playerY, playerWidth, playerHeight);
+    // Bind the player texture
+    glBindTexture(GL_TEXTURE_2D, playerTexture);
+    glEnable(GL_TEXTURE_2D);
+    glColor3f(1.0f, 1.0f, 1.0f); // Set color to white to not tint the texture
+
+    // Enable blending for transparency if PNG has alpha channel
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(playerX - playerWidth / 2, playerY - playerHeight / 2);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(playerX + playerWidth / 2, playerY - playerHeight / 2);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(playerX + playerWidth / 2, playerY + playerHeight / 2);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(playerX - playerWidth / 2, playerY + playerHeight / 2);
+    glEnd();
+
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_BLEND);
+    glBindTexture(GL_TEXTURE_2D, 0); // Unbind texture
 }
 
 void drawPlatforms() {
@@ -119,9 +175,12 @@ void update() {
 void display() {
     glClear(GL_COLOR_BUFFER_BIT);
     glLoadIdentity();
+
     glTranslatef(0.0f, -cameraY, 0.0f);
-    drawPlayer();
-    drawPlatforms();
+
+    drawPlatforms(); // Draw platforms first
+    drawPlayer();    // Draw player on top
+
     if (gameOver) {
     }
     glutSwapBuffers();
@@ -186,6 +245,18 @@ void init() {
     glClearColor(0.8f, 0.9f, 1.0f, 1.0f);
     srand(time(0));
     generateInitialPlatforms();
+
+    // Load player texture
+    if (!loadTexture("bean.png", playerTexture, playerTexWidth, playerTexHeight)) {
+        // Handle texture loading failure (e.g., exit or use fallback color)
+        std::cerr << "Failed to load player texture! Exiting." << std::endl;
+        exit(1);
+    }
+
+    // Enable necessary OpenGL features
+    glEnable(GL_TEXTURE_2D);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 }
 
 int main(int argc, char** argv) {
