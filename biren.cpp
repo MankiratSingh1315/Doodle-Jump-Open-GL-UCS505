@@ -6,7 +6,7 @@
 #include <iostream>
 #include <algorithm>
 #include <sstream>
-#include <limits>
+#include <limits> // For high score
 
 int windowWidth = 400;
 int windowHeight = 600;
@@ -20,15 +20,12 @@ float playerVelY = 0.0f;
 float moveSpeed = 4.0f;
 float gravity = 0.3f;
 float jumpStrength = 10.0f;
-float boostedJumpStrength = 18.0f;
+float boostedJumpStrength = 18.0f; // For spring power-up
 bool hasBoost = false;
-int boostDuration = 300;
+int boostDuration = 300; // Frames, increased duration for high jump
 int boostTimer = 0;
 
-void drawRect(float x, float y, float width, float height);
-
-class Platform {
-public:
+struct Platform {
     float x, y;
     float width = 60.0f;
     float height = 10.0f;
@@ -36,96 +33,30 @@ public:
     float velX = 2.0f;
     bool breakable = false;
     bool broken = false;
-
-    Platform(float startX, float startY, bool isMoving = false, bool isBreakable = false)
-        : x(startX), y(startY), moving(isMoving), breakable(isBreakable) {}
-
-    void draw() const {
-        if (broken) return;
-        if (breakable) glColor3f(0.8f, 0.5f, 0.5f);
-        else if (moving) glColor3f(0.4f, 0.4f, 0.9f);
-        else glColor3f(0.5f, 0.25f, 0.0f);
-        drawRect(x, y, width, height);
-    }
-
-    void update() {
-        if (moving && !broken) {
-            x += velX;
-            if (x < width / 2 || x > windowWidth - width / 2) {
-                velX *= -1;
-            }
-        }
-    }
 };
 
-class Collectible {
-public:
+// REMOVE OLD PowerUp struct
+// struct PowerUp {
+// float x, y;
+// float size = 20.0f;
+// bool active = true;
+// };
+
+struct Coin {
     float x, y;
-    float size;
+    float size = 15.0f; // Smaller than old power-ups
     bool active = true;
-
-    Collectible(float startX, float startY, float itemSize)
-        : x(startX), y(startY), size(itemSize) {}
-
-    virtual ~Collectible() = default;
-
-    virtual void draw() const = 0;
-
-    bool checkCollision(float pX, float pY, float pWidth, float pHeight) {
-        if (!active) return false;
-
-        bool xOverlap = pX + pWidth / 2 > x - size / 2 &&
-                        pX - pWidth / 2 < x + size / 2;
-        bool yOverlap = pY + pHeight / 2 > y - size / 2 &&
-                        pY - pHeight / 2 < y + size / 2;
-        
-        if (xOverlap && yOverlap) {
-            active = false;
-            return true;
-        }
-        return false;
-    }
-    
-    virtual void applyEffect() = 0;
 };
 
-class Coin : public Collectible {
-public:
-    Coin(float startX, float startY) : Collectible(startX, startY, 15.0f) {}
-
-    void draw() const override {
-        if (!active) return;
-        glColor3f(1.0f, 0.84f, 0.0f);
-        drawRect(x, y, size, size);
-    }
-
-    void applyEffect() override {
-        extern int coinsCollected;
-        coinsCollected++;
-    }
+struct HighJumpPowerUp {
+    float x, y;
+    float size = 20.0f; // Similar to old power-ups, but blue
+    bool active = true;
 };
-
-class HighJumpPowerUp : public Collectible {
-public:
-    HighJumpPowerUp(float startX, float startY) : Collectible(startX, startY, 20.0f) {}
-
-    void draw() const override {
-        if (!active) return;
-        glColor3f(0.2f, 0.2f, 1.0f);
-        drawRect(x, y, size, size);
-    }
-
-    void applyEffect() override {
-        extern bool hasBoost;
-        extern int boostTimer;
-        extern int boostDuration;
-        hasBoost = true;
-        boostTimer = boostDuration;
-    }
-};
-
 
 std::vector<Platform> platforms;
+// REMOVE OLD powerUps vector
+// std::vector<PowerUp> powerUps;
 std::vector<Coin> coins;
 std::vector<HighJumpPowerUp> highJumpPowerUps;
 
@@ -135,7 +66,7 @@ float platformSpacing = 80.0f;
 float cameraY = 0.0f;
 int score = 0;
 int highScore = 0;
-int coinsCollected = 0;
+int coinsCollected = 0; // New counter for coins
 
 enum GameState { MENU, PLAYING, GAME_OVER };
 GameState gameState = MENU;
@@ -164,19 +95,36 @@ void drawPlayer() {
 
 void drawPlatforms() {
     for (const auto& p : platforms) {
-        p.draw();
+        if (p.broken) continue;
+        if (p.breakable) glColor3f(0.8f, 0.5f, 0.5f); // Pink for breakable
+        else if (p.moving) glColor3f(0.4f, 0.4f, 0.9f); // Blueish for moving
+        else glColor3f(0.5f, 0.25f, 0.0f); // Brown for regular
+        drawRect(p.x, p.y, p.width, p.height);
     }
 }
 
+// REMOVE OLD drawPowerUps
+// void drawPowerUps() {
+// for (const auto& pu : powerUps) {
+// if (!pu.active) continue;
+// glColor3f(1.0f, 0.8f, 0.2f);
+// drawRect(pu.x, pu.y, pu.size, pu.size);
+// }
+// }
+
 void drawCoins() {
+    glColor3f(1.0f, 0.84f, 0.0f); // Gold color for coins
     for (const auto& c : coins) {
-        c.draw();
+        if (!c.active) continue;
+        drawRect(c.x, c.y, c.size, c.size);
     }
 }
 
 void drawHighJumpPowerUps() {
+    glColor3f(0.2f, 0.2f, 1.0f); // Blue color for high jump power-up
     for (const auto& hjpu : highJumpPowerUps) {
-        hjpu.draw();
+        if (!hjpu.active) continue;
+        drawRect(hjpu.x, hjpu.y, hjpu.size, hjpu.size);
     }
 }
 
@@ -185,52 +133,58 @@ void generateInitialPlatforms() {
     coins.clear();
     highJumpPowerUps.clear();
 
-    platforms.emplace_back(windowWidth / 2.0f, 50.0f);
-    coins.emplace_back(platforms.back().x, platforms.back().y + platforms.back().height / 2 + 7.5f + 5.0f);
+    platforms.push_back({ windowWidth / 2.0f, 50.0f });
+    // Coin for the first platform
+    coins.push_back({ platforms.back().x, platforms.back().y + platforms.back().height / 2 + 7.5f + 5.0f, 15.0f, true });
 
 
     float currentY = platforms[0].y + platformSpacing;
     for (int i = 1; i < initialPlatforms; ++i) {
         float randX = (rand() % (windowWidth - 60)) + 30;
-        bool isMoving = (rand() % 10 < 2);
-        bool isBreakable = (rand() % 10 < 2 && !isMoving);
-        
-        platforms.emplace_back(randX, currentY, isMoving, isBreakable);
-        coins.emplace_back(platforms.back().x, platforms.back().y + platforms.back().height / 2 + 7.5f + 5.0f);
+        Platform p = { randX, currentY };
+        int type = rand() % 10;
+        if (type < 2) { p.moving = true; }
+        else if (type < 4) { p.breakable = true; }
+        platforms.push_back(p);
+        // Add a coin for this platform
+        coins.push_back({ p.x, p.y + p.height / 2 + 7.5f + 5.0f, 15.0f, true });
 
         currentY += platformSpacing;
     }
 
+    // Add one initial high jump power-up if enough platforms
     if (initialPlatforms > 4) {
         float randX_hj = (rand() % (windowWidth - 40)) + 20;
-        int targetPlatformIndex = rand() % (platforms.size() / 2) + (platforms.size() / 3) ;
-        float randY_hj = platforms[targetPlatformIndex].y + platforms[targetPlatformIndex].height / 2 + 10.0f + 5.0f;
-        highJumpPowerUps.emplace_back(randX_hj, randY_hj);
+        float randY_hj = platforms[initialPlatforms / 2].y + platformSpacing * 0.75f; // Place it interestingly
+        highJumpPowerUps.push_back({randX_hj, randY_hj, 20.0f, true});
     }
 }
 
 void generateNewPlatforms() {
-    while (platforms.empty() || platforms.back().y < cameraY + windowHeight + platformSpacing) {
-        float lastY = platforms.empty() ? cameraY - windowHeight : platforms.back().y;
+    while (platforms.back().y < cameraY + windowHeight + platformSpacing) {
+        float lastY = platforms.back().y;
         float randX = (rand() % (windowWidth - 60)) + 30;
-        
-        bool isMoving = (rand() % 10 < 2);
-        bool isBreakable = (rand() % 10 < 2 && !isMoving);
-
-        platforms.emplace_back(randX, lastY + platformSpacing, isMoving, isBreakable);
+        Platform p = { randX, lastY + platformSpacing };
+        int type = rand() % 10;
+        if (type < 2) p.moving = true;
+        else if (type < 4) p.breakable = true;
+        platforms.push_back(p);
         score += 10;
 
-        coins.emplace_back(platforms.back().x, platforms.back().y + platforms.back().height / 2 + 7.5f + 5.0f);
+        // Add a coin for this new platform
+        coins.push_back({ p.x, p.y + p.height / 2 + 7.5f + 5.0f, 15.0f, true });
 
+        // Scarce high jump power-up (e.g., 1 in 15 platforms might get one nearby)
         if (rand() % 15 == 0) {
             float hjpuX = (rand() % (windowWidth - 60)) + 30;
-            float hjpuY = platforms.back().y + platforms.back().height / 2 + 10.0f + (rand() % 20);
-            highJumpPowerUps.emplace_back(hjpuX, hjpuY);
+            // Place it a bit above the platform, can be anywhere horizontally
+            float hjpuY = p.y + platformSpacing * (0.25f + (rand() % 50) / 100.0f); // Vary height a bit
+            highJumpPowerUps.push_back({hjpuX, hjpuY, 20.0f, true});
         }
     }
 }
 
-void removeOldPlatforms() {
+void removeOldPlatforms() { // Also remove coins and powerups
     platforms.erase(std::remove_if(platforms.begin(), platforms.end(),
         [&](const Platform& p) {
             return p.y < cameraY - p.height;
@@ -238,12 +192,12 @@ void removeOldPlatforms() {
 
     coins.erase(std::remove_if(coins.begin(), coins.end(),
         [&](const Coin& c) {
-            return !c.active || c.y < cameraY - c.size;
+            return c.y < cameraY - c.size;
         }), coins.end());
 
     highJumpPowerUps.erase(std::remove_if(highJumpPowerUps.begin(), highJumpPowerUps.end(),
         [&](const HighJumpPowerUp& hjpu) {
-            return !hjpu.active || hjpu.y < cameraY - hjpu.size;
+            return hjpu.y < cameraY - hjpu.size;
         }), highJumpPowerUps.end());
 }
 
@@ -254,15 +208,20 @@ void resetGame() {
     playerVelY = 0.0f;
     cameraY = 0.0f;
     score = 0;
-    coinsCollected = 0;
+    coinsCollected = 0; // Reset coin counter
     hasBoost = false;
     boostTimer = 0;
-    generateInitialPlatforms();
+    generateInitialPlatforms(); // This will clear and repopulate platforms, coins, highJumpPowerUps
 }
 
 void updatePlatforms() {
     for (auto& p : platforms) {
-        p.update();
+        if (p.moving && !p.broken) {
+            p.x += p.velX;
+            if (p.x < p.width / 2 || p.x > windowWidth - p.width / 2) {
+                p.velX *= -1;
+            }
+        }
     }
 }
 
@@ -278,39 +237,62 @@ void update() {
 
     updatePlatforms();
 
-    if (playerVelY < 0) {
+    if (playerVelY < 0) { // Player is falling
         for (auto& p : platforms) {
             if (p.broken) continue;
 
             bool xOverlap = playerX + playerWidth / 2 > p.x - p.width / 2 &&
                             playerX - playerWidth / 2 < p.x + p.width / 2;
 
-            if (xOverlap) { 
+            if (xOverlap) { // Check for Y collision only if X overlaps
                 float player_bottom_current = playerY - playerHeight / 2;
+                // playerY has been updated by playerY += playerVelY.
+                // So, playerY_old = playerY (current) - playerVelY (that was just added).
                 float player_bottom_previous = (playerY - playerVelY) - playerHeight / 2;
                 float platform_top_surface = p.y + p.height / 2;
+                // float platform_bottom_surface = p.y - p.height / 2; // Not strictly needed for this logic
 
-                if (player_bottom_previous >= platform_top_surface &&
-                    player_bottom_current < platform_top_surface) {    
+                // Check if player crossed the top surface of the platform from above
+                if (player_bottom_previous >= platform_top_surface &&  // Was at or above platform top in previous step
+                    player_bottom_current < platform_top_surface) {    // And is now below platform top (i.e., crossed it)
                     
-                    playerY = platform_top_surface + playerHeight / 2;
+                    playerY = platform_top_surface + playerHeight / 2; // Position player exactly on top
                     playerVelY = hasBoost ? boostedJumpStrength : jumpStrength;
                     if (p.breakable) p.broken = true;
-                    break; 
+                    // playJumpSound();  <-- SOUND placeholder
+                    break; // Landed on one platform, no need to check others
                 }
             }
         }
     }
 
+    // Power-up collision (now for coins and high jump)
+    // Coin collision
     for (auto& c : coins) {
-        if (c.checkCollision(playerX, playerY, playerWidth, playerHeight)) {
-            c.applyEffect();
+        if (!c.active) continue;
+        bool xOverlapCoin = playerX + playerWidth / 2 > c.x - c.size / 2 &&
+                            playerX - playerWidth / 2 < c.x + c.size / 2;
+        bool yOverlapCoin = playerY + playerHeight / 2 > c.y - c.size / 2 &&
+                            playerY - playerHeight / 2 < c.y + c.size / 2;
+        if (xOverlapCoin && yOverlapCoin) {
+            c.active = false;
+            coinsCollected++;
+            // playCoinSound(); // Placeholder
         }
     }
 
+    // High Jump PowerUp collision
     for (auto& hjpu : highJumpPowerUps) {
-        if (hjpu.checkCollision(playerX, playerY, playerWidth, playerHeight)) {
-            hjpu.applyEffect();
+        if (!hjpu.active) continue;
+        bool xOverlapHJPU = playerX + playerWidth / 2 > hjpu.x - hjpu.size / 2 &&
+                            playerX - playerWidth / 2 < hjpu.x + hjpu.size / 2;
+        bool yOverlapHJPU = playerY + playerHeight / 2 > hjpu.y - hjpu.size / 2 &&
+                            playerY - playerHeight / 2 < hjpu.y + hjpu.size / 2;
+        if (xOverlapHJPU && yOverlapHJPU) {
+            hjpu.active = false;
+            hasBoost = true;
+            boostTimer = boostDuration; // Use the existing boost mechanism
+            // playPowerUpSound(); // Placeholder
         }
     }
 
@@ -331,6 +313,7 @@ void update() {
         gameState = GAME_OVER;
         if (score > highScore) highScore = score;
         std::cout << "Game Over! Final Score: " << score << std::endl;
+        // playGameOverSound();  <-- SOUND placeholder
     }
 
     glutPostRedisplay();
@@ -367,7 +350,7 @@ void display() {
         ss << "High Score: " << highScore;
         renderBitmapString(windowWidth / 2 - 70, windowHeight / 2 - 30, GLUT_BITMAP_HELVETICA_18, ss.str().c_str());
         glColor3f(0.0f, 0.0f, 0.0f);
-        renderBitmapString(windowWidth / 2 - 90, windowHeight / 2 - 50, GLUT_BITMAP_HELVETICA_18, "Press R to Restart");
+        renderBitmapString(windowWidth / 2 - 90, windowHeight / 2 - 50, GLUT_BITMAP_HELVETICA_18, "Press R to Restart or ESC to Menu");
     }
     else if (gameState == PLAYING) {
         glPushMatrix();
@@ -383,6 +366,7 @@ void display() {
         ss << "Score: " << score;
         renderBitmapString(10.0f, windowHeight - 20.0f, GLUT_BITMAP_HELVETICA_18, ss.str().c_str());
 
+        // Display Coin Counter
         std::stringstream coin_ss;
         coin_ss << "Coins: " << coinsCollected;
         renderBitmapString(10.0f, windowHeight - 40.0f, GLUT_BITMAP_HELVETICA_18, coin_ss.str().c_str());
@@ -395,6 +379,7 @@ void display() {
 
         glTranslatef(0.0f, -cameraY, 0.0f);
         drawPlatforms();
+        // drawPowerUps(); // Removed
         drawCoins();
         drawHighJumpPowerUps();
         drawPlayer();
@@ -429,7 +414,7 @@ void keyboard(unsigned char key, int x, int y) {
 }
 
 void keyboardUp(unsigned char key, int x, int y) {
-    if (gameState == PLAYING && (key == 'a' || key == 'd' || key == 'A' || key == 'D')) {
+    if (gameState == PLAYING && (key == 'a' || key == 'd' || key == 'A' || key == 'D')) { // Added 'A', 'D'
         playerVelX = 0.0f;
     }
 }
